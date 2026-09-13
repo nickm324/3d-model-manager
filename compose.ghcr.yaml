@@ -1,0 +1,28 @@
+name: 3d-model-manager
+services:
+  model-manager:
+    image: ghcr.io/${GITHUB_OWNER:?Set GITHUB_OWNER}/3d-model-manager:${IMAGE_TAG:-latest}
+    container_name: 3d-model-manager
+    restart: unless-stopped
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"
+    network_mode: host
+    environment:
+      DATA_PATH: /data
+      LIBRARY_PATH: /fallback-library
+      PORT: "${APP_PORT:-3210}"
+      LIBRARY_WRITABLE: "${LIBRARY_WRITABLE:-true}"
+      SCAN_INTERVAL_SECONDS: "300"
+      RENDER_TIMEOUT_SECONDS: "120"
+      MAX_FILE_MB: "256"
+      QT_QPA_PLATFORM: offscreen
+    volumes:
+      - "${DATA_HOST_PATH:?Set DATA_HOST_PATH}:/data"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
