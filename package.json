@@ -23,6 +23,6 @@
     "three": "0.180.0"
   },
   "devDependencies": {
-    "esbuild-wasm": "0.25.10"
+    "esbuild-wasm": "0.28.2"
   }
 }
