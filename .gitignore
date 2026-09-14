@@ -1,0 +1,10 @@
+node_modules/
+.npm-cache/
+public/
+.env
+data/
+demo-library/
+*.log
+.test-tmp*/
+work/
+*.zip

@@ -1,0 +1,39 @@
+name: 3d-model-manager
+services:
+  model-manager:
+    build: .
+    image: 3d-model-manager:local
+    restart: unless-stopped
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-3210}:3210"
+    environment:
+      LIBRARY_PATH: /fallback-library
+      DATA_PATH: /data
+      LIBRARY_WRITABLE: "${LIBRARY_WRITABLE:-true}"
+      SCAN_INTERVAL_SECONDS: "300"
+      RENDER_TIMEOUT_SECONDS: "120"
+      MAX_FILE_MB: "256"
+      QT_QPA_PLATFORM: offscreen
+    volumes:
+      - type: bind
+        source: "${DATA_HOST_PATH:?Set DATA_HOST_PATH to a local OMV app-data directory}"
+        target: /data
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
