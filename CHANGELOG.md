@@ -2,6 +2,12 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.2.1] - 2026-09-29
+
+### Fixed
+
+- Backup ZIPs now retain custom covers and print photos belonging to models currently in the recycle bin.
+
 ## [2.2.0] - 2026-09-13
 
 ### Added

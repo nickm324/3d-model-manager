@@ -1,6 +1,6 @@
 {
   "name": "3d-model-manager",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "private": true,
   "description": "Self-hosted STL, 3MF, and OpenSCAD library with direct SMB support",
   "license": "MIT",

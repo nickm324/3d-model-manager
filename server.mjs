@@ -306,7 +306,7 @@ export async function createApp(options = {}) {
   }
   async function makeBackupZip(payload, source = metadata, prefix = '') {
     const entries = { [`${prefix}backup.json`]: strToU8(JSON.stringify(payload, null, 2)) }, covers = new Set(), photos = new Set();
-    for (const item of Object.values(source.items || {})) { if (item.customCover) covers.add(item.customCover); for (const record of item.prints || []) if (record.photo) photos.add(record.photo); }
+    for (const item of [...Object.values(source.items || {}), ...Object.values(source.recycle || {}).map(entry => entry.metadata).filter(Boolean)]) { if (item.customCover) covers.add(item.customCover); for (const record of item.prints || []) if (record.photo) photos.add(record.photo); }
     for (const id of covers) try { entries[`${prefix}thumbnails/${id}`] = new Uint8Array(await fs.readFile(path.join(dataDir, 'thumbnails', id))); } catch {}
     for (const id of photos) try { entries[`${prefix}print-photos/${id}`] = new Uint8Array(await fs.readFile(path.join(dataDir, 'print-photos', id))); } catch {}
     for (const id of Object.keys(source.recycle || {})) try { entries[`${prefix}recycle/${id}`] = new Uint8Array(await fs.readFile(path.join(dataDir, 'recycle', id))); } catch {}
