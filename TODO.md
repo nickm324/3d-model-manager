@@ -64,3 +64,9 @@
 - [x] Add upgrade and backup documentation.
 - [x] Add automated releases, container images, changelog, screenshots, and issue templates.
 - [ ] Publish signed desktop bridge installers when signing credentials are available.
+
+## 13. Local computer folders
+- [ ] Extend the desktop bridge to let users approve folders on Windows, macOS, and Linux.
+- [ ] Index approved STL, 3MF, and OpenSCAD files without exposing arbitrary local files to the browser or Docker container.
+- [ ] Show local bridge folders alongside SMB library sources with connection and indexing status.
+- [ ] Support reconnecting approved folders after the desktop bridge restarts.

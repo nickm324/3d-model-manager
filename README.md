@@ -57,6 +57,10 @@ npm start
 
 Local development uses `LIBRARY_PATH` as a fallback filesystem library. Use disposable files when testing write operations.
 
+## Coming next: local computer folders
+
+A cross-platform desktop bridge is planned for Windows, macOS, and Linux. Users will explicitly approve local folders on their computer, and 3D Model Manager will index those folders through the bridge without granting the browser or OMV Docker container unrestricted access to the computer. The bridge will build on the existing slicer integration and will support reconnecting approved folders after restart.
+
 ## Project
 
 - [Changelog](CHANGELOG.md)
