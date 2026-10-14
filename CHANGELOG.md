@@ -2,6 +2,13 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.2] - 2026-10-14
+
+### Fixed
+
+- Allow the bundled OpenCascade WebAssembly runtime to compile under the app Content Security Policy so STEP and STP previews load in supported browsers.
+- Explain that native Fusion F3D/F3Z projects must be exported as STEP or 3MF instead of launching a slicer that cannot import them.
+
 ## [2.3.1] - 2026-10-14
 
 ### Added

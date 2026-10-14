@@ -20,6 +20,18 @@ async function fixture(writable = true) {
   return { dir, library, data, call, close };
 }
 
+test('browser policy permits the bundled STEP WebAssembly runtime without allowing general eval', async () => {
+  const app = await fixture();
+  try {
+    const response = await app.call('/');
+    const policy = response.headers.get('content-security-policy');
+    assert.match(policy, /script-src 'self' 'wasm-unsafe-eval'/);
+    assert.doesNotMatch(policy, /(?:^|\s)'unsafe-eval'(?:;|\s|$)/);
+  } finally {
+    await app.close();
+  }
+});
+
 test('scan, metadata, source backup/conflict, move/import collision, and persistence', async () => {
   const app = await fixture();
   try {
