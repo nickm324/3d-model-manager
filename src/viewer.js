@@ -3,8 +3,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { unzipSync, strFromU8 } from 'three/addons/libs/fflate.module.js';
-let occtPromise;
-const occt = () => occtPromise ||= globalThis.occtimportjs({ locateFile: name => name.endsWith('.wasm') ? '/occt-import-js.wasm' : name });
+let stepWorker, stepRequest = 0;
+const stepPending = new Map();
+const convertStep = buffer => new Promise((resolve, reject) => {
+  if (!stepWorker) {
+    stepWorker = new Worker('/step-worker.js');
+    stepWorker.onmessage = ({ data }) => { const request = stepPending.get(data.id); if (!request) return; stepPending.delete(data.id); data.error ? request.reject(new Error(data.error)) : request.resolve(data.result); };
+    stepWorker.onerror = event => { for (const request of stepPending.values()) request.reject(new Error(event.message || 'STEP conversion failed.')); stepPending.clear(); stepWorker.terminate(); stepWorker = null; };
+  }
+  const id = ++stepRequest; stepPending.set(id, { resolve, reject }); stepWorker.postMessage({ id, buffer }, [buffer]);
+});
 
 function basic3mf(buffer) {
   const archive = unzipSync(new Uint8Array(buffer));
@@ -84,7 +92,7 @@ export class ModelViewer {
       object.traverse(child => { if (child.isMesh) { child.material.side = THREE.DoubleSide; } });
     } else if (['step', 'stp', 'ste'].includes(type)) {
       this.status.hidden = false; this.status.textContent = 'Converting STEP geometry…';
-      const result = (await occt()).ReadStepFile(new Uint8Array(buffer), { linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: 0.001, angularDeflection: 0.5 });
+      const result = await convertStep(buffer);
       if (!result.success || !result.meshes?.length) throw new Error('No supported geometry was found in this STEP file.');
       object = new THREE.Group();
       for (const mesh of result.meshes) {

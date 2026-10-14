@@ -20,13 +20,15 @@ async function fixture(writable = true) {
   return { dir, library, data, call, close };
 }
 
-test('browser policy permits the bundled STEP WebAssembly runtime without allowing general eval', async () => {
+test('browser policy isolates the generated STEP loader in its worker', async () => {
   const app = await fixture();
   try {
     const response = await app.call('/');
     const policy = response.headers.get('content-security-policy');
     assert.match(policy, /script-src 'self' 'wasm-unsafe-eval'/);
     assert.doesNotMatch(policy, /(?:^|\s)'unsafe-eval'(?:;|\s|$)/);
+    const serverSource = await fs.readFile(new URL('../server.mjs', import.meta.url), 'utf8');
+    assert.match(serverSource, /endpoint === '\/step-worker\.js'.*script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'/s);
   } finally {
     await app.close();
   }
