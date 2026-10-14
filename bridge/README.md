@@ -15,6 +15,8 @@ Supported local files are STL, 3MF, OpenSCAD (`.scad`), STEP (`.step`, `.stp`, `
 
 Run `npm run build` to create an executable for the current computer. Run `npm run build:all` to create unsigned Windows x64, Linux x64/ARM64, and macOS x64/ARM64 executables. The first build downloads the matching Node runtimes.
 
+On Windows, the packaged bridge runs as a background application without a command window. Double-clicking it opens a local status page that shows the pairing code and provides a **Stop bridge** button. Folder approval uses the operating system's folder picker. macOS uses Finder's folder picker; Linux uses Zenity, KDialog, or YAD when installed.
+
 Windows and macOS may show an unknown-publisher warning until release binaries are code signed. macOS builds may need an ad-hoc signature (`codesign --sign - <file>`) when built on another platform.
 
 The bridge stores approved folders, its pairing token, and slicer settings in `.3d-model-manager-bridge.json` in the current user's home folder.
