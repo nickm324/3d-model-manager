@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { unzipSync, strFromU8 } from 'three/addons/libs/fflate.module.js';
+import { stepModelColor } from './model-color.js';
 let stepWorker, stepRequest = 0;
 const stepPending = new Map();
 const convertStep = buffer => new Promise((resolve, reject) => {
@@ -100,7 +101,7 @@ export class ModelViewer {
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3));
         if (mesh.attributes.normal?.array?.length) geometry.setAttribute('normal', new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3)); else geometry.computeVertexNormals();
         if (mesh.index?.array?.length) geometry.setIndex(mesh.index.array);
-        const color = mesh.color ? new THREE.Color(mesh.color[0] / 255, mesh.color[1] / 255, mesh.color[2] / 255) : new THREE.Color(0xeeb36e);
+        const color = new THREE.Color(...stepModelColor(mesh.color));
         object.add(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: .48, metalness: .12, side: THREE.DoubleSide })));
       }
       this.status.hidden = true;

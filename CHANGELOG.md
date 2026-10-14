@@ -2,6 +2,12 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.8] - 2026-10-14
+
+### Fixed
+
+- Render normalized STEP/STP material colors at their intended brightness and replace nearly black faces with the standard orange model color for visibility.
+
 ## [2.3.7] - 2026-10-14
 
 ### Added
