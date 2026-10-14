@@ -39,6 +39,47 @@ async function pickFolder() {
 }
 const browserCommand = url => process.platform === 'win32' ? ['powershell.exe', ['-NoProfile', '-Command', `Start-Process '${url}'`]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
 const openStatusPage = port => { const [command, args] = browserCommand(`http://127.0.0.1:${port}/`); const child = spawn(command, args, { detached: true, windowsHide: true, stdio: 'ignore' }); child.unref(); };
+const startWindowsTray = (port, managementToken) => {
+  if (process.platform !== 'win32' || process.env.MODEL_MANAGER_BRIDGE_NO_TRAY === '1') return null;
+  const script = String.raw`
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$statusUrl = $env:MODEL_MANAGER_BRIDGE_STATUS_URL
+$quitToken = $env:MODEL_MANAGER_BRIDGE_MANAGEMENT_TOKEN
+$context = New-Object System.Windows.Forms.ApplicationContext
+$tray = New-Object System.Windows.Forms.NotifyIcon
+$tray.Icon = [System.Drawing.SystemIcons]::Application
+$tray.Text = '3D Model Manager Bridge'
+$tray.Visible = $true
+$menu = New-Object System.Windows.Forms.ContextMenuStrip
+$openItem = $menu.Items.Add('Open status and pairing')
+$stopItem = $menu.Items.Add('Stop bridge')
+$open = { Start-Process $statusUrl }
+$openItem.add_Click($open)
+$tray.add_DoubleClick($open)
+$stopItem.add_Click({
+  try {
+    $body = @{ token = $quitToken } | ConvertTo-Json -Compress
+    Invoke-WebRequest -UseBasicParsing -Method Post -Uri ($statusUrl + 'quit') -ContentType 'application/json' -Body $body | Out-Null
+  } catch {}
+  $tray.Visible = $false
+  $context.ExitThread()
+})
+$tray.ContextMenuStrip = $menu
+$tray.BalloonTipTitle = '3D Model Manager Bridge'
+$tray.BalloonTipText = 'The bridge is running. Double-click this icon to pair or manage it.'
+$tray.ShowBalloonTip(5000)
+try { [System.Windows.Forms.Application]::Run($context) } finally { $tray.Visible = $false; $tray.Dispose(); $menu.Dispose() }
+`;
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const child = spawn('powershell.exe', ['-NoProfile', '-STA', '-EncodedCommand', encoded], {
+    windowsHide: true,
+    stdio: 'ignore',
+    env: { ...process.env, MODEL_MANAGER_BRIDGE_STATUS_URL: `http://127.0.0.1:${port}/`, MODEL_MANAGER_BRIDGE_MANAGEMENT_TOKEN: managementToken }
+  });
+  child.once('error', () => openStatusPage(port));
+  return child;
+};
 const page = (port, managementToken) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Model Manager Bridge</title><style>body{margin:0;background:#101923;color:#edf3f9;font:16px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(560px,calc(100% - 40px));background:#1a2735;border:1px solid #3a4a5d;border-radius:14px;padding:30px;box-shadow:0 24px 70px #0007}h1{margin:0 0 8px;font-size:1.5rem}p{color:#aebed0;line-height:1.55}.code{font:700 2.3rem ui-monospace,monospace;letter-spacing:.22em;color:#ffad54;background:#111b26;padding:15px 18px;border-radius:9px;text-align:center}button{background:#273648;color:#eef4fa;border:1px solid #53677e;border-radius:7px;padding:10px 14px;cursor:pointer}.ok{color:#9bd8ad}.row{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:24px}</style><main class="card"><h1>3D Model Manager Bridge</h1><p class="ok">Running on this computer</p><p>Enter this code in <strong>3D Model Manager → Settings → Desktop slicers</strong> the first time you connect:</p><div class="code">${config.code}</div><div class="row"><p>You can close this browser tab. The bridge will keep running quietly in the background.</p><button id="stop">Stop bridge</button></div></main><script>document.querySelector('#stop').onclick=async()=>{await fetch('/quit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:'${managementToken}'})});document.body.innerHTML='<main class="card"><h1>Bridge stopped</h1><p>You can close this tab.</p></main>'}</script></html>`;
 
 async function slicers() {
@@ -74,7 +115,7 @@ async function scanFolder(folder) {
 
 export function startBridge(port = 3211, options = {}) {
   const chooseFolder = options.pickFolder || pickFolder;
-  const managementToken = randomBytes(24).toString('base64url');
+  const managementToken = options.managementToken || randomBytes(24).toString('base64url');
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin || '';
     if (req.method === 'OPTIONS') return reply(res, 204, {}, origin);
@@ -130,11 +171,17 @@ export function startBridge(port = 3211, options = {}) {
       reply(res, 404, { error: 'Not found.' }, origin);
     } catch (error) { reply(res, 400, { error: error.message }, origin); }
   });
+  server.managementToken = managementToken;
   return server.listen(port, '127.0.0.1', () => console.log(`3D Model Manager Bridge ready on port ${server.address().port}. Pairing code: ${config.code}`));
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file:///${path.resolve(process.argv[1]).replaceAll('\\', '/')}`).href) {
   const port = Number(process.env.MODEL_MANAGER_BRIDGE_PORT || 3211), server = startBridge(port);
-  server.once('listening', () => { if (process.env.MODEL_MANAGER_BRIDGE_NO_BROWSER !== '1') openStatusPage(server.address().port); });
+  let tray = null;
+  server.once('listening', () => {
+    tray = startWindowsTray(server.address().port, server.managementToken);
+    if (process.env.MODEL_MANAGER_BRIDGE_NO_BROWSER !== '1') openStatusPage(server.address().port);
+  });
+  server.once('close', () => { if (tray && !tray.killed) tray.kill(); });
   server.once('error', error => { if (error.code === 'EADDRINUSE') { if (process.env.MODEL_MANAGER_BRIDGE_NO_BROWSER !== '1') openStatusPage(port); process.exit(0); } throw error; });
 }
