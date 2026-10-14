@@ -2,6 +2,18 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.1] - 2026-10-14
+
+### Added
+
+- Native workstation folder picker for bridge folder approval.
+- Background Windows bridge executable with a browser-based status and pairing page.
+- STEP and Fusion 360 entries in the library file-type filter.
+
+### Changed
+
+- STEP filtering includes `.step`, `.stp`, and `.ste`; Fusion filtering includes `.f3d` and `.f3z`.
+
 ## [2.3.0] - 2026-10-14
 
 ### Added

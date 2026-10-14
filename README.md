@@ -58,9 +58,9 @@ npm start
 
 Local development uses `LIBRARY_PATH` as a fallback filesystem library. Use disposable files when testing write operations.
 
-## Coming next: local computer folders
+## Local computer folders
 
-The cross-platform Workstation Bridge can detect slicers and synchronize explicitly approved local folders from Windows, macOS, or Linux. Local models are copied into `Workstations/<computer>/<folder>` in the configured Docker library; the browser and container do not receive unrestricted workstation access. See [bridge/README.md](bridge/README.md) for running and building the bridge.
+The cross-platform Workstation Bridge can detect slicers and synchronize explicitly approved local folders from Windows, macOS, or Linux. Choose folders with the operating system's folder picker; no path typing is required. Local models are copied into `Workstations/<computer>/<folder>` in the configured Docker library, while the browser and container remain unable to access other workstation files. The Windows release runs quietly in the background and uses a local browser page for status, pairing, and shutdown. See [bridge/README.md](bridge/README.md) for running and building the bridge.
 
 ## Project
 

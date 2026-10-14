@@ -67,6 +67,6 @@
 
 ## 13. Local computer folders
 - [x] Extend the desktop bridge to let users approve folders on Windows, macOS, and Linux.
-- [ ] Index approved STL, 3MF, and OpenSCAD files without exposing arbitrary local files to the browser or Docker container.
+- [x] Index approved STL, 3MF, OpenSCAD, STEP, and Fusion files without exposing arbitrary local files to the browser or Docker container.
 - [x] Show local bridge folders with connection and indexing status.
 - [x] Support reconnecting approved folders after the desktop bridge restarts.

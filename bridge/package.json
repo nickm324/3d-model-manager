@@ -1,13 +1,13 @@
 {
   "name": "3d-model-manager-bridge",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "bin": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
-    "build": "pkg . --sea --target host --output dist/3d-model-manager-bridge",
-    "build:all": "pkg . --sea --targets node24-win-x64,node24-linux-x64,node24-linux-arm64,node24-macos-x64,node24-macos-arm64 --out-path dist"
+    "build": "pkg . --sea --target host --output dist/3d-model-manager-bridge && node scripts/patch-windows-gui.mjs dist",
+    "build:all": "pkg . --sea --targets node24-win-x64,node24-linux-x64,node24-linux-arm64,node24-macos-x64,node24-macos-arm64 --out-path dist && node scripts/patch-windows-gui.mjs dist"
   },
   "engines": { "node": ">=22" },
   "devDependencies": { "@yao-pkg/pkg": "^6.23.0" }
