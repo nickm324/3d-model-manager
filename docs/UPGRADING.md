@@ -16,7 +16,7 @@ Do not delete or recreate the host app-data folder. The application upgrades its
 
 ## Upgrade a GitHub Container Registry image
 
-Pull the desired tag and redeploy the stack. Pin a version such as `2.2.0` when predictable upgrades are preferred; use `latest` to follow stable releases.
+Pull the desired tag and redeploy the stack. Pin a complete version number from the [releases page](https://github.com/nickm324/3d-model-manager/releases) when predictable upgrades are preferred; use `latest` to follow stable releases.
 
 ## Disaster recovery
 
