@@ -169,6 +169,7 @@ export async function createApp(options = {}) {
     scanning = (async () => {
       scanControl = { phase: 'discovering', current: '', processed: 0, total: 0, warnings: 0, paused: false, cancel: false, startedAt: new Date().toISOString() };
       const next = [], dirs = [], libraryDirs = [], readmes = [], warnings = [];
+      if (metadata.config.scanFolders.length && !metadata.config.scanFolders.includes('Workstations') && await storage.exists('Workstations')) { metadata.config.scanFolders.push('Workstations'); metadata.config.scanFolders.sort(); await persist(); }
       if (metadata.config.smb?.host && metadata.config.scanFolders.length) folders = [...new Set([...folders, ...metadata.config.scanFolders])].sort();
       async function yieldToInteractiveWork() {
         if (scanControl.cancel) throw Object.assign(new Error('Scan cancelled.'), { cancelled: true });
@@ -692,9 +693,10 @@ export async function createApp(options = {}) {
         await scan(); return json(res, { revision: hash(body.source) });
       }
       if (endpoint === '/api/folders/ensure' && method === 'POST') {
-        requireWrite(); const body = await jsonBody(req), requested = Array.isArray(body.paths) ? body.paths.map(value => relative(String(value), true)).filter(Boolean).slice(0, 5000) : [];
+        requireWrite(); const body = await jsonBody(req), requested = Array.isArray(body.paths) ? body.paths.map(value => relative(String(value), true)).filter(Boolean).slice(0, 5000) : [], scanRoot = body.scanRoot ? relative(String(body.scanRoot), true) : '';
         for (const rel of requested.sort((a, b) => a.split('/').length - b.split('/').length)) if (!await storage.exists(metadata.config.smb ? rel : storagePath(path.join(root, rel)))) await storage.mkdir(metadata.config.smb ? rel : storagePath(path.join(root, rel)));
-        return json(res, { ensured: requested.length });
+        if (scanRoot && requested.includes(scanRoot) && metadata.config.scanFolders.length && !metadata.config.scanFolders.includes(scanRoot)) { metadata.config.scanFolders.push(scanRoot); metadata.config.scanFolders.sort(); await persist(); }
+        return json(res, { ensured: requested.length, scanRoot: scanRoot || null });
       }
       if (endpoint === '/api/folder' && method === 'POST') {
         requireWrite(); const body = await jsonBody(req); const dir = await resolveFile(body.path, { parent: true });

@@ -2,6 +2,17 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.7] - 2026-10-14
+
+### Added
+
+- Show the running bridge version on its status page, tray tooltip, tray **About** command, and connected badge in application settings.
+
+### Fixed
+
+- Automatically include the app-managed `Workstations` import root in configured library scan folders so synchronized desktop models appear in folder navigation.
+- Count a model as missing details only when it has no useful user-entered or extracted project information.
+
 ## [2.3.6] - 2026-10-14
 
 ### Fixed

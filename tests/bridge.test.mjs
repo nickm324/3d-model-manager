@@ -13,8 +13,9 @@ test('workstation bridge approves, scans, and serves only supported files inside
   const origin = 'http://model-manager.test', root = `http://127.0.0.1:${server.address().port}`, stored = JSON.parse(await fs.readFile(process.env.MODEL_MANAGER_BRIDGE_CONFIG, 'utf8'));
   const request = (route, body, token = '') => fetch(root + route, { method: body === undefined ? 'GET' : 'POST', headers: { Origin: origin, 'Content-Type': 'application/json', 'X-Bridge-Token': token }, body: body === undefined ? undefined : JSON.stringify(body) });
   try {
-    let response = await fetch(root); assert.equal(response.status, 200); assert.match(await response.text(), /3D Model Manager Bridge/);
+    let response = await fetch(root); assert.equal(response.status, 200); const statusPage = await response.text(); assert.match(statusPage, /3D Model Manager Bridge/); assert.match(statusPage, /Version 2\.3\.2/);
     response = await request('/pair', { code: stored.code }); assert.equal(response.status, 200); const { token } = await response.json();
+    response = await request('/status', undefined, token); assert.equal((await response.json()).version, '2.3.2');
     response = await request('/folders/pick', {}, token); assert.equal(response.status, 201); const picked = await response.json(); assert.equal(picked.folder.path, models);
     response = await request('/folders/add', { path: models }, token); assert.equal(response.status, 201); const { folder } = await response.json();
     response = await request('/folders/scan', { id: folder.id }, token); const scan = await response.json(); assert.deepEqual(scan.files.map(file => file.path).sort(), ['nested/design.f3d', 'part.step']);

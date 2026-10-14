@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchesModelSearch } from '../src/search.js';
+import { hasModelDetails, matchesModelSearch } from '../src/search.js';
 
 const tagged = { path: 'Parts/pickup.stl', tags: ['Truck'], notes: '' };
 const prose = { path: 'Clock.3mf', tags: [], notes: 'The inspiration struck instantly.' };
@@ -19,4 +19,11 @@ test('tag search requires an exact tag', () => {
 test('quoted search supports exact phrases', () => {
   assert.equal(matchesModelSearch({ ...tagged, notes: 'Heavy duty truck mount' }, '"truck mount"'), true);
   assert.equal(matchesModelSearch({ ...tagged, notes: 'Truck axle mount' }, '"truck mount"'), false);
+});
+
+test('missing details accepts either extracted project information or organized metadata', () => {
+  assert.equal(hasModelDetails({ projectInfo: { description: 'Instructions from README' } }), true);
+  assert.equal(hasModelDetails({ modelInfo: { standard: { designer: 'Model author' } } }), true);
+  assert.equal(hasModelDetails({ tags: ['fixture'] }), true);
+  assert.equal(hasModelDetails({ path: 'plain.stl' }), false);
 });
