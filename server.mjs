@@ -419,7 +419,7 @@ export async function createApp(options = {}) {
       const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'same-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' http://127.0.0.1:3211; worker-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' http://127.0.0.1:3211; worker-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'none'");
     try {
       const url = new URL(req.url, 'http://localhost');
       const endpoint = url.pathname, method = req.method;

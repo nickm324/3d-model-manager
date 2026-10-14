@@ -286,6 +286,7 @@ async function selectFile(file) {
   $('project').value = file.projectId || ''; $('file-role').value = file.role || ''; $('source-link').value = file.sourcePath || ''; drawRelationship(file); drawPrintHistory(file);
   $('file-info').textContent = `${file.type.toUpperCase()} · ${bytes(file.size)} · ${new Date(file.modified).toLocaleDateString()}`;
   const directBambu = file.type === '3mf', localBridge = !!bridgeToken(); $('slicer-choice').querySelector('[value="bambu-direct"]').disabled = !directBambu; if (!directBambu && $('slicer-choice').value === 'bambu-direct') $('slicer-choice').value = 'bridge'; $('open-slicer').disabled = file.type === 'scad'; $('open-slicer').textContent = file.type === 'stl' && !localBridge ? 'Download for slicer' : 'Open in slicer'; $('open-slicer').title = file.type === 'scad' ? 'Render or export the OpenSCAD model to STL before opening it in a slicer.' : file.type === 'stl' && !localBridge ? 'Bambu Studio only accepts 3MF files through its web link. Download this STL and open the local file.' : '';
+  if (['f3d', 'f3z'].includes(file.type)) { $('open-slicer').textContent = 'Export from Fusion first'; $('open-slicer').title = 'Bambu Studio accepts STEP and 3MF exports, but cannot import native Fusion project files.'; }
   $('convert-3mf').hidden = file.type !== 'stl'; $('convert-3mf').disabled = !state.writable; $('convert-3mf').title = state.writable ? 'Create a 3MF copy with the available model and project details.' : 'File editing must be enabled to save a converted 3MF.';
   drawExtractedInfo(file);
   const scad = file.type === 'scad';
@@ -444,6 +445,7 @@ action('fit', () => viewer?.fit());
 action('wireframe', () => { const enabled = $('wireframe').getAttribute('aria-pressed') !== 'true'; $('wireframe').setAttribute('aria-pressed', enabled); viewer?.setWireframe(enabled); });
 action('open-slicer', async () => {
   if (!state.selected) return;
+  if (['f3d', 'f3z'].includes(state.selected.type)) throw new Error('Bambu Studio cannot import native Fusion project files. Export this project from Fusion as STEP or 3MF first.');
   if (state.selected.type === 'stl' && !bridgeToken()) { const response = await api(fileUrl(state.selected)); saveBlob(await response.blob(), state.selected.name); toast('STL downloaded. Open the downloaded file in Bambu Studio.'); return; }
   const link = await request('/api/open-link', 'POST', { path: state.selected.path }), absolute = new URL(link.url, location.href).href;
   if ($('slicer-choice').value === 'bambu-direct' && state.selected.type === '3mf') { const mac = /Mac/i.test(navigator.userAgent); location.href = mac ? `bambustudioopen://${absolute}` : `bambustudio://open?file=${encodeURIComponent(absolute)}`; return; }
