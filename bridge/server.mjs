@@ -16,7 +16,7 @@ const candidates = process.platform === 'win32' ? [
 
 let config;
 try { config = JSON.parse(await fs.readFile(configPath, 'utf8')); } catch { config = {}; }
-config = { code: String(config.code || Math.floor(100000 + Math.random() * 900000)), token: String(config.token || ''), origin: String(config.origin || ''), defaultPath: String(config.defaultPath || ''), manual: Array.isArray(config.manual) ? config.manual : [], folders: Array.isArray(config.folders) ? config.folders : [] };
+config = { code: String(config.code || Math.floor(100000 + Math.random() * 900000)), token: String(config.token || ''), origin: String(config.origin || ''), defaultPath: String(config.defaultPath || ''), installedPath: String(config.installedPath || ''), manual: Array.isArray(config.manual) ? config.manual : [], folders: Array.isArray(config.folders) ? config.folders : [] };
 const save = () => fs.writeFile(configPath, JSON.stringify(config, null, 2));
 await save();
 
@@ -27,15 +27,38 @@ const runCapture = (command, args, options = {}) => new Promise((resolve, reject
   child.once('error', reject);
   child.once('close', code => code === 0 ? resolve(Buffer.concat(output).toString('utf8').trim()) : reject(Object.assign(new Error(Buffer.concat(errors).toString('utf8').trim() || 'Folder selection was cancelled.'), { cancelled: true })));
 });
+async function runVbs(script) {
+  const file = path.join(os.tmpdir(), `3d-model-manager-${randomUUID()}.vbs`);
+  await fs.writeFile(file, script, 'utf8');
+  try { return await runCapture('cscript.exe', ['//Nologo', file]); }
+  finally { await fs.rm(file, { force: true }).catch(() => {}); }
+}
 async function pickFolder() {
   if (process.platform === 'win32') {
-    const script = "Add-Type -AssemblyName System.Windows.Forms; $picker = New-Object System.Windows.Forms.FolderBrowserDialog; $picker.Description = 'Choose a model folder'; $picker.ShowNewFolderButton = $true; if ($picker.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $picker.SelectedPath } else { exit 2 }";
-    return runCapture('powershell.exe', ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-Command', script], { windowsHide: false });
+    return runVbs(`Set shell = CreateObject("Shell.Application")\nSet folder = shell.BrowseForFolder(0, "Choose a model folder", 65, 0)\nIf folder Is Nothing Then WScript.Quit 2\nWScript.StdOut.Write folder.Self.Path`);
   }
   if (process.platform === 'darwin') return (await runCapture('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choose a model folder")'])).replace(/\/$/, '');
   const choices = [['zenity', ['--file-selection', '--directory', '--title=Choose a model folder']], ['kdialog', ['--getexistingdirectory', os.homedir(), '--title', 'Choose a model folder']], ['yad', ['--file-selection', '--directory', '--title=Choose a model folder']]];
   for (const [command, args] of choices) try { return await runCapture(command, args); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   throw new Error('No supported folder picker was found. Install Zenity, KDialog, or YAD.');
+}
+const bridgeIcon = 'AAABAAEAICAQAAAAAADoAgAAFgAAACgAAAAgAAAAQAAAAAEABAAAAAAAgAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACAAAAAgIAAgAAAAIAAgACAgAAAgICAAMDAwAAAAP8AAP8AAAD//wD/AAAA/wD/AP//AAD///8AAAAAAAAAADMzMAAAAAAAAAAAAAAAE3u7u7uzEAAAAAAAAAAAA7u7u7u7u7MQAAAAAAAAA7u7u7u7u7u7swAAAAAAADu7u7u7u7u7u7swAAAAAAO7u7u7s3O7u7u7swAAAAA7u7u7txAAB7u7u7swAAAAu7u7tzAAAAA3u7u7sQAAA7u7tzAAAwMwADe7u7MAAAu7u7MAA7MDswAAe7u7EAA7u7tzA3uzA7uzATu7uzAAO7u7MDu7swO7uzA7u7twALu7uzA7u7MDu7swO7u7sAC7u7swO7uzA7u7MDu7u7EBu7u7MDu7swO7uzA7u7uzAbu7uzA7u7MBu7swO7u7swG7u7swO7cQAAe7MDu7u7MAu7u7MDcwAAAANzA7u7uxALu7uzAQAAe3MAAQO7u7sAA7u7swAAO7u7MAADu7u3AAO7u7cAB7u7u7cAA7u7swAAe7u7MAA3u7cwADu7u7AAADu7u7cwADcwAAe7u7swAAAHu7u7swAAAAO7u7u3AAAAAHu7u7uzAwN7u7u7sQAAAAAbu7u7u3d7u7u7uzAAAAAAAXu7u7u7u7u7u7MAAAAAAAAHu7u7u7u7u7cQAAAAAAAAADe7u7u7u7swAAAAAAAAAAAAE7u7u7MwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///////gH///AAf//AAB//gAAP/wAAB/4AAAP8AAAB/AAAAfgAAAD4AAAA+AAAAPAAAABwAAAAcAAAAHAAAABwAAAAcAAAAHAAAAB4AAAA+AAAAPwAAAD8AAAB/gAAA/8AAAP/AAAH/8AAD//gAD//+AB///4D////////////w==';
+const vbsString = value => String(value).replaceAll('"', '""');
+async function stopExistingBridge(port) {
+  try {
+    const page = await fetch(`http://127.0.0.1:${port}/`, { headers: { Connection: 'close' } }), html = await page.text(), token = html.match(/token:'([^']+)'/)?.[1];
+    if (token) await fetch(`http://127.0.0.1:${port}/quit`, { method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' }, body: JSON.stringify({ token }) });
+    await new Promise(resolve => setTimeout(resolve, 500));
+  } catch {}
+}
+async function installWindowsBridge(port) {
+  const local = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), folder = path.join(local, '3D Model Manager Bridge');
+  const executable = path.join(folder, '3d-model-manager-bridge.exe'), icon = path.join(folder, '3d-model-manager-bridge.ico');
+  await stopExistingBridge(port); await fs.mkdir(folder, { recursive: true }); await fs.copyFile(process.execPath, executable); await fs.writeFile(icon, Buffer.from(bridgeIcon, 'base64'));
+  const target = vbsString(executable), working = vbsString(folder), iconPath = vbsString(`${icon},0`);
+  if (process.env.MODEL_MANAGER_BRIDGE_SKIP_SHORTCUTS !== '1') await runVbs(`Set shell = CreateObject("WScript.Shell")\nSub MakeShortcut(location)\n  Set shortcut = shell.CreateShortcut(location & "\\3D Model Manager Bridge.lnk")\n  shortcut.TargetPath = "${target}"\n  shortcut.WorkingDirectory = "${working}"\n  shortcut.IconLocation = "${iconPath}"\n  shortcut.Save\nEnd Sub\nMakeShortcut shell.SpecialFolders("Desktop")\nMakeShortcut shell.SpecialFolders("Startup")\nMakeShortcut shell.SpecialFolders("Programs")`);
+  config.installedPath = executable; await save();
+  const child = spawn(executable, [], { detached: true, windowsHide: true, stdio: 'ignore' }); child.unref();
 }
 const browserCommand = url => process.platform === 'win32' ? ['powershell.exe', ['-NoProfile', '-Command', `Start-Process '${url}'`]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
 const openStatusPage = port => { const [command, args] = browserCommand(`http://127.0.0.1:${port}/`); const child = spawn(command, args, { detached: true, windowsHide: true, stdio: 'ignore' }); child.unref(); };
@@ -96,7 +119,7 @@ try { [System.Windows.Forms.Application]::Run($context) } finally { $tray.Visibl
   child.once('error', () => openStatusPage(port));
   return child;
 };
-const page = (port, managementToken) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Model Manager Bridge</title><style>body{margin:0;background:#101923;color:#edf3f9;font:16px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(560px,calc(100% - 40px));background:#1a2735;border:1px solid #3a4a5d;border-radius:14px;padding:30px;box-shadow:0 24px 70px #0007}h1{margin:0 0 8px;font-size:1.5rem}p{color:#aebed0;line-height:1.55}.code{font:700 2.3rem ui-monospace,monospace;letter-spacing:.22em;color:#ffad54;background:#111b26;padding:15px 18px;border-radius:9px;text-align:center}button{background:#273648;color:#eef4fa;border:1px solid #53677e;border-radius:7px;padding:10px 14px;cursor:pointer}.ok{color:#9bd8ad}.row{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:24px}</style><main class="card"><h1>3D Model Manager Bridge</h1><p class="ok">Running on this computer</p><p>Enter this code in <strong>3D Model Manager → Settings → Desktop slicers</strong> the first time you connect:</p><div class="code">${config.code}</div><div class="row"><p>You can close this browser tab. The bridge will keep running quietly in the background.</p><button id="stop">Stop bridge</button></div></main><script>document.querySelector('#stop').onclick=async()=>{await fetch('/quit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:'${managementToken}'})});document.body.innerHTML='<main class="card"><h1>Bridge stopped</h1><p>You can close this tab.</p></main>'}</script></html>`;
+const page = (port, managementToken) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Model Manager Bridge</title><style>body{margin:0;background:#101923;color:#edf3f9;font:16px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(560px,calc(100% - 40px));background:#1a2735;border:1px solid #3a4a5d;border-radius:14px;padding:30px;box-shadow:0 24px 70px #0007}h1{margin:0 0 8px;font-size:1.5rem}p{color:#aebed0;line-height:1.55}.code{font:700 2.3rem ui-monospace,monospace;letter-spacing:.22em;color:#ffad54;background:#111b26;padding:15px 18px;border-radius:9px;text-align:center}button{background:#273648;color:#eef4fa;border:1px solid #53677e;border-radius:7px;padding:10px 14px;cursor:pointer}.ok{color:#9bd8ad}.row{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:24px}</style><main class="card"><h1>3D Model Manager Bridge</h1><p class="ok">Running on this computer${config.installedPath ? ' · Starts with Windows' : ''}</p><p>Enter this code in <strong>3D Model Manager → Settings → Desktop slicers</strong> the first time you connect:</p><div class="code">${config.code}</div><div class="row"><p>You can close this browser tab. The bridge will keep running quietly in the background.</p><button id="stop">Stop bridge</button></div></main><script>document.querySelector('#stop').onclick=async()=>{await fetch('/quit',{method:'POST',headers:{'Content-Type':'application/json',Connection:'close'},body:JSON.stringify({token:'${managementToken}'})});document.body.innerHTML='<main class="card"><h1>Bridge stopped</h1><p>You can close this tab. It will start again the next time you sign in to Windows.</p></main>'}</script></html>`;
 
 async function slicers() {
   const result = [];
@@ -140,7 +163,7 @@ export function startBridge(port = 3211, options = {}) {
       if (req.method !== 'GET') for await (const chunk of req) chunks.push(chunk);
       const body = chunks.length ? JSON.parse(Buffer.concat(chunks)) : {};
       if (url.pathname === '/' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'" }); return res.end(page(server.address()?.port || port, managementToken)); }
-      if (url.pathname === '/quit' && req.method === 'POST') { if (body.token !== managementToken) return reply(res, 403, { error: 'Invalid management token.' }); reply(res, 200, { stopped: true }); setTimeout(() => server.close(() => process.exit(0)), 50); return; }
+      if (url.pathname === '/quit' && req.method === 'POST') { if (body.token !== managementToken) return reply(res, 403, { error: 'Invalid management token.' }); reply(res, 200, { stopped: true }); setTimeout(() => { server.close(); server.closeAllConnections?.(); setTimeout(() => process.exit(0), 100); }, 50); return; }
       if (url.pathname === '/pair' && req.method === 'POST') {
         if (String(body.code) !== config.code) return reply(res, 401, { error: 'Pairing code is incorrect.' }, origin);
         config.token = randomBytes(24).toString('base64url'); config.origin = origin; await save(); return reply(res, 200, { token: config.token }, origin);
@@ -192,7 +215,9 @@ export function startBridge(port = 3211, options = {}) {
 }
 
 if (process.argv[1] && import.meta.url === new URL(`file:///${path.resolve(process.argv[1]).replaceAll('\\', '/')}`).href) {
-  const port = Number(process.env.MODEL_MANAGER_BRIDGE_PORT || 3211), server = startBridge(port);
+  const port = Number(process.env.MODEL_MANAGER_BRIDGE_PORT || 3211);
+  if (process.platform === 'win32' && /setup/i.test(path.basename(process.execPath)) && process.env.MODEL_MANAGER_BRIDGE_SKIP_INSTALL !== '1') { await installWindowsBridge(port); process.exit(0); }
+  const server = startBridge(port);
   let tray = null;
   server.once('listening', () => {
     tray = startWindowsTray(server.address().port, server.managementToken);
