@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/addons/loaders/3MFLoader.js';
 import { unzipSync, strFromU8 } from 'three/addons/libs/fflate.module.js';
+let occtPromise;
+const occt = () => occtPromise ||= globalThis.occtimportjs({ locateFile: name => name.endsWith('.wasm') ? '/occt-import-js.wasm' : name });
 
 function basic3mf(buffer) {
   const archive = unzipSync(new Uint8Array(buffer));
@@ -54,10 +56,11 @@ export class ModelViewer {
   }
   resize() { const { width, height } = this.host.getBoundingClientRect(); if (!width || !height) return; this.renderer.setSize(width, height, false); this.camera.aspect = width / height; this.camera.updateProjectionMatrix(); }
   clear(message = '') {
+    this.previewImage?.remove(); this.previewImage = null;
     if (this.object) { this.scene.remove(this.object); this.object.traverse(obj => { obj.geometry?.dispose(); const mats = Array.isArray(obj.material) ? obj.material : [obj.material]; for (const mat of mats) { mat?.map?.dispose(); mat?.dispose(); } }); this.object = null; }
     this.status.textContent = message; this.status.hidden = !message; this.dimensions.textContent = '—';
   }
-  show(buffer, type) {
+  async show(buffer, type) {
     this.clear();
     let object;
     if (type === '3mf') {
@@ -79,6 +82,27 @@ export class ModelViewer {
       try { object = new ThreeMFLoader(manager).parse(buffer); }
       catch (error) { console.warn('3MF project data could not be fully loaded; using geometry fallback.', error); object = basic3mf(buffer); }
       object.traverse(child => { if (child.isMesh) { child.material.side = THREE.DoubleSide; } });
+    } else if (['step', 'stp', 'ste'].includes(type)) {
+      this.status.hidden = false; this.status.textContent = 'Converting STEP geometry…';
+      const result = (await occt()).ReadStepFile(new Uint8Array(buffer), { linearUnit: 'millimeter', linearDeflectionType: 'bounding_box_ratio', linearDeflection: 0.001, angularDeflection: 0.5 });
+      if (!result.success || !result.meshes?.length) throw new Error('No supported geometry was found in this STEP file.');
+      object = new THREE.Group();
+      for (const mesh of result.meshes) {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(mesh.attributes.position.array, 3));
+        if (mesh.attributes.normal?.array?.length) geometry.setAttribute('normal', new THREE.Float32BufferAttribute(mesh.attributes.normal.array, 3)); else geometry.computeVertexNormals();
+        if (mesh.index?.array?.length) geometry.setIndex(mesh.index.array);
+        const color = mesh.color ? new THREE.Color(mesh.color[0] / 255, mesh.color[1] / 255, mesh.color[2] / 255) : new THREE.Color(0xeeb36e);
+        object.add(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, roughness: .48, metalness: .12, side: THREE.DoubleSide })));
+      }
+      this.status.hidden = true;
+    } else if (type === 'f3d' || type === 'f3z') {
+      const archive = unzipSync(new Uint8Array(buffer));
+      const imageName = Object.keys(archive).find(name => /(?:thumbnail|preview|snapshot|image).*(?:png|jpe?g)$/i.test(name)) || Object.keys(archive).find(name => /\.(?:png|jpe?g)$/i.test(name));
+      if (!imageName) throw new Error('This Fusion archive has no embedded preview. Open it in Autodesk Fusion or keep a companion STEP export for interactive viewing.');
+      const bytes = archive[imageName], mime = /\.jpe?g$/i.test(imageName) ? 'image/jpeg' : 'image/png', url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      const image = document.createElement('img'); image.className = 'fusion-preview'; image.alt = 'Embedded Autodesk Fusion preview'; image.src = url; image.onload = () => URL.revokeObjectURL(url); this.host.append(image); this.previewImage = image;
+      this.dimensions.textContent = 'Embedded Fusion project preview'; this.status.textContent = 'Interactive Fusion geometry requires a companion STEP export.'; this.status.hidden = false; this.resize(); return;
     } else {
       const geometry = new STLLoader().parse(buffer);
       if (!geometry.attributes.position?.count) throw new Error('This STL has no visible triangles.');

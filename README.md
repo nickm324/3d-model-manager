@@ -16,7 +16,8 @@
 
 ## Highlights
 
-- Interactive STL and 3MF viewer with automatic and custom thumbnails.
+- Interactive STL, 3MF, and STEP viewer with automatic and custom thumbnails.
+- Autodesk Fusion F3D/F3Z catalog support with embedded project previews when available.
 - Convert STL files to 3MF while embedding available model metadata and README details, with the option to keep or remove the original STL.
 - OpenSCAD editor, Customizer parameters, dependency inspection, presets, rendering, and STL export.
 - Direct SMB discovery and folder selection without host mount points.
@@ -59,7 +60,7 @@ Local development uses `LIBRARY_PATH` as a fallback filesystem library. Use disp
 
 ## Coming next: local computer folders
 
-A cross-platform desktop bridge is planned for Windows, macOS, and Linux. Users will explicitly approve local folders on their computer, and 3D Model Manager will index those folders through the bridge without granting the browser or OMV Docker container unrestricted access to the computer. The bridge will build on the existing slicer integration and will support reconnecting approved folders after restart.
+The cross-platform Workstation Bridge can detect slicers and synchronize explicitly approved local folders from Windows, macOS, or Linux. Local models are copied into `Workstations/<computer>/<folder>` in the configured Docker library; the browser and container do not receive unrestricted workstation access. See [bridge/README.md](bridge/README.md) for running and building the bridge.
 
 ## Project
 

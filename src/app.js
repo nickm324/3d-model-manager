@@ -153,7 +153,27 @@ async function detectSlicers() {
   $('slicer-choice').querySelectorAll('option[data-bridge]').forEach(option => option.remove());
   for (const slicer of result.slicers) { const option = new Option(slicer.name, `bridge:${slicer.path}`); option.dataset.bridge = '1'; $('slicer-choice').add(option); }
   $('bridge-status').textContent = result.slicers.length ? `${result.slicers.length} slicer${result.slicers.length === 1 ? '' : 's'} detected on this computer.` : 'Bridge connected, but no supported slicers were detected.';
+  state.bridge = result; drawBridgeFolders(result.folders || []);
   return result;
+}
+function drawBridgeFolders(folders) {
+  $('bridge-folders').innerHTML = folders.length ? folders.map(folder => `<div class="admin-row"><div><strong>${escape(folder.name)}</strong><span>${escape(folder.path)} · ${folder.count || 0} supported files${folder.lastScan ? ` · scanned ${new Date(folder.lastScan).toLocaleString()}` : ''}</span></div><div><button type="button" data-sync-bridge-folder="${escape(folder.id)}">Sync</button><button type="button" data-remove-bridge-folder="${escape(folder.id)}">Remove</button></div></div>`).join('') : '<span>No local folders approved on this workstation.</span>';
+}
+const cleanSegment = value => String(value || '').replace(/[<>:"|?*\\/]+/g, '-').replace(/^\.+|\.+$/g, '').trim() || 'Models';
+async function syncBridgeFolder(id) {
+  if (!state.writable) throw new Error('Enable library write access before syncing local folders.');
+  const scan = await bridgeRequest('/folders/scan', { id }), root = `Workstations/${cleanSegment(scan.hostname)}/${cleanSegment(scan.folder.name)}`; let copied = 0;
+  $('bridge-status').textContent = `Syncing 0 of ${scan.files.length} files from ${scan.folder.name}…`;
+  const folders = new Set();
+  for (const file of scan.files) { const parts = `${root}/${file.path.split('/').map(cleanSegment).join('/')}`.split('/').slice(0, -1); let current = ''; for (const part of parts) { current = current ? `${current}/${part}` : part; folders.add(current); } }
+  await request('/api/folders/ensure', 'POST', { paths: [...folders] });
+  for (const file of scan.files) {
+    const target = `${root}/${file.path.split('/').map(cleanSegment).join('/')}`;
+    const response = await fetch(`http://127.0.0.1:3211/folders/file?id=${encodeURIComponent(id)}&path=${encodeURIComponent(file.path)}`, { headers: { 'X-Bridge-Token': bridgeToken() } });
+    if (!response.ok) { const issue = await response.json().catch(() => ({})); throw new Error(issue.error || `Could not read ${file.path}.`); }
+    await api(`/api/upload?replace=1&deferScan=1&path=${encodeURIComponent(target)}`, { method: 'POST', body: await response.blob() }); copied++; $('bridge-status').textContent = `Syncing ${copied} of ${scan.files.length} files from ${scan.folder.name}…`;
+  }
+  await request('/api/scan', 'POST'); await refresh(); await detectSlicers(); toast(`${copied} local file${copied === 1 ? '' : 's'} synchronized.`);
 }
 function drawExtractedInfo(file) {
   const host = $('extracted-info'), info = file.modelInfo, project = file.projectInfo, rows = [];
@@ -284,7 +304,7 @@ async function selectFile(file) {
       draftChanged(); showEditorMode(state.editorMode || 'customizer');
     } else {
       const buffer = await (await api(fileUrl(file))).arrayBuffer(); if (token !== state.selectionToken) return;
-      viewer?.show(buffer, file.type);
+      await viewer?.show(buffer, file.type);
     }
   } catch (e) { if (token === state.selectionToken) { viewer?.clear(e.message); toast(e.message); } }
 }
@@ -522,6 +542,9 @@ action('admin-new-folder', () => promptPath('Create a library folder', 'Create a
 action('bridge-pair', async () => { const response = await fetch('http://127.0.0.1:3211/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: $('bridge-code').value.trim() }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not pair the bridge.'); localStorage.setItem('model-manager-bridge-token', result.token); await detectSlicers(); toast('Desktop bridge paired.'); });
 action('bridge-refresh', detectSlicers);
 action('bridge-add-manual', async () => { const name = $('bridge-manual-name').value.trim(), path = $('bridge-manual-path').value.trim(); if (!name || !path) throw new Error('Enter both a slicer name and executable path.'); await bridgeRequest('/settings', { manualAdd: { name, path } }); await detectSlicers(); $('bridge-manual-name').value = ''; $('bridge-manual-path').value = ''; });
+action('bridge-add-folder', async () => { const path = $('bridge-folder-path').value.trim(); if (!path) throw new Error('Enter the full path of a local folder.'); await bridgeRequest('/folders/add', { path }); $('bridge-folder-path').value = ''; await detectSlicers(); toast('Local folder approved.'); });
+action('bridge-sync-all', async () => { const folders = (await detectSlicers()).folders || []; for (const folder of folders) await syncBridgeFolder(folder.id); });
+$('bridge-folders').addEventListener('click', async event => { const sync = event.target.closest('[data-sync-bridge-folder]'), remove = event.target.closest('[data-remove-bridge-folder]'); try { if (sync) await syncBridgeFolder(sync.dataset.syncBridgeFolder); if (remove) { await bridgeRequest('/folders/remove', { id: remove.dataset.removeBridgeFolder }); await detectSlicers(); } } catch (error) { toast(error.message); } });
 $('bridge-default').addEventListener('change', async () => { await bridgeRequest('/settings', { defaultPath: $('bridge-default').value }); $('bridge-status').textContent = 'Default slicer saved on this computer.'; });
 const networkCredentials = () => ({ host: $('network-host').value.trim(), username: $('network-user').value, password: $('network-password').value, domain: $('network-domain').value.trim(), share: $('network-share-manual').value.trim() || $('network-share').value, folder: $('network-folder').value });
 action('browse-network', async () => {
