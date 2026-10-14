@@ -3,7 +3,7 @@ import { StreamLanguage } from '@codemirror/language';
 import { clike } from '@codemirror/legacy-modes/mode/clike';
 import { ModelViewer } from './viewer.js';
 import { parseParameters, parameterChange } from './customizer.js';
-import { matchesModelSearch } from './search.js';
+import { hasModelDetails, matchesModelSearch } from './search.js';
 
 const $ = id => document.getElementById(id);
 const state = { files: [], folders: [], projects: [], collapsedFolders: new Set(), knownBranchFolders: new Set(), selectedPaths: new Set(), selected: null, mode: 'all', folder: '', collection: '', projectId: '', limit: 60, dirty: false, metaDirty: false, settingsDirty: false, source: '', revision: '', selectionToken: 0, renderToken: 0, writable: false, config: null, scanPoll: null };
@@ -158,7 +158,7 @@ async function detectSlicers() {
   let result;
   try { result = await bridgeRequest('/status'); }
   catch (error) { setBridgeConnection(false); throw error; }
-  setBridgeConnection(true, result.hostname);
+  setBridgeConnection(true, `${result.hostname}${result.version ? ` · Bridge v${result.version}` : ''}`);
   $('bridge-default').innerHTML = result.slicers.length ? result.slicers.map(s => `<option value="${escape(s.path)}" ${s.default ? 'selected' : ''}>${escape(s.name)}</option>`).join('') : '<option value="">No supported slicers detected</option>';
   $('slicer-choice').querySelectorAll('option[data-bridge]').forEach(option => option.remove());
   for (const slicer of result.slicers) { const option = new Option(slicer.name, `bridge:${slicer.path}`); option.dataset.bridge = '1'; $('slicer-choice').add(option); }
@@ -176,7 +176,7 @@ async function syncBridgeFolder(id) {
   $('bridge-status').textContent = `Syncing 0 of ${scan.files.length} files from ${scan.folder.name}…`;
   const folders = new Set();
   for (const file of scan.files) { const parts = `${root}/${file.path.split('/').map(cleanSegment).join('/')}`.split('/').slice(0, -1); let current = ''; for (const part of parts) { current = current ? `${current}/${part}` : part; folders.add(current); } }
-  await request('/api/folders/ensure', 'POST', { paths: [...folders] });
+  await request('/api/folders/ensure', 'POST', { paths: [...folders], scanRoot: 'Workstations' });
   for (const file of scan.files) {
     const target = `${root}/${file.path.split('/').map(cleanSegment).join('/')}`;
     const response = await fetch(`http://127.0.0.1:3211/folders/file?id=${encodeURIComponent(id)}&path=${encodeURIComponent(file.path)}`, { headers: { 'X-Bridge-Token': bridgeToken() } });
@@ -231,8 +231,7 @@ function drawNav() {
   $('total').textContent = state.files.length; $('favorite-count').textContent = state.files.filter(f => f.favorite).length;
   $('all-files').classList.toggle('active', state.mode === 'all'); $('favorites').classList.toggle('active', state.mode === 'favorites');
   $('duplicates').classList.toggle('active', state.mode === 'duplicates'); $('duplicate-count').textContent = new Set(state.files.map(file => file.duplicateGroup).filter(Boolean)).size;
-  const missing = file => !file.collection || !(file.tags || []).length || !(file.notes || file.projectInfo?.description || file.modelInfo?.standard?.description);
-  $('missing-metadata').classList.toggle('active', state.mode === 'missing'); $('missing-count').textContent = state.files.filter(missing).length;
+  $('missing-metadata').classList.toggle('active', state.mode === 'missing'); $('missing-count').textContent = state.files.filter(file => !hasModelDetails(file)).length;
   const visibleFolders = state.folders.filter(folder => !folder.split('/').slice(0, -1).some((_, index, parts) => state.collapsedFolders.has(parts.slice(0, index + 1).join('/'))));
   $('folders').innerHTML = visibleFolders.length ? visibleFolders.map(folder => { const source = (state.config?.scanFolders || []).filter(root => folder === root || folder.startsWith(`${root}/`)).sort((a, b) => b.length - a.length)[0], depth = source ? folder === source ? 0 : folder.slice(source.length + 1).split('/').length : folder.split('/').length - 1, hasChildren = state.folders.some(item => item.startsWith(`${folder}/`)); return `<div class="folder-row" style="padding-left:${Math.min(depth, 5) * 12}px">${hasChildren ? `<button class="folder-toggle" data-toggle-folder="${escape(folder)}" aria-label="${state.collapsedFolders.has(folder) ? 'Expand' : 'Collapse'} ${escape(folder)}">${state.collapsedFolders.has(folder) ? '▸' : '▾'}</button>` : '<span class="folder-toggle-spacer"></span>'}<button class="folder ${state.mode === 'folder' && state.folder === folder ? 'active' : ''}" data-folder="${escape(folder)}" title="${escape(folder)}"><span class="folder-symbol">▱</span>${escape(folder.split('/').at(-1))}</button></div>`; }).join('') : '<p class="empty" style="padding:10px">Folders appear here when the library is scanned.</p>';
   const collections = [...new Set([...(state.config?.collections || []), ...state.files.map(f => f.collection).filter(Boolean)])].sort();
@@ -249,7 +248,7 @@ function drawFiles() {
   const filters = readFilters(), megabyte = 1048576;
   const result = state.files.filter(f => {
     const standard = f.modelInfo?.standard || {}, dimensions = f.dimensions || standard.dimensions || [], longest = dimensions.length ? Math.max(...dimensions.map(Number).filter(Number.isFinite)) : null;
-    return typeMatches(f.type) && (state.mode !== 'favorites' || f.favorite) && (state.mode !== 'duplicates' || f.duplicateGroup) && (state.mode !== 'missing' || !f.collection || !(f.tags || []).length || !(f.notes || f.projectInfo?.description || f.modelInfo?.standard?.description)) && (state.mode !== 'folder' || f.folder === state.folder || f.folder.startsWith(`${state.folder}/`)) && (state.mode !== 'collection' || f.collection === state.collection) && (state.mode !== 'project' || f.projectId === state.projectId) && matchesModelSearch(f, search) && (!filters.collection || f.collection === filters.collection) && (!filters.designer || String(standard.designer || '').toLowerCase().includes(filters.designer.toLowerCase())) && (!filters.license || String(standard.license || f.projectInfo?.license || '').toLowerCase().includes(filters.license.toLowerCase())) && (!filters.slicer || String(standard.application || '').toLowerCase().includes(filters.slicer.toLowerCase())) && (!filters.sizeMin || f.size >= Number(filters.sizeMin) * megabyte) && (!filters.sizeMax || f.size <= Number(filters.sizeMax) * megabyte) && (!filters.dimensionMin || longest != null && longest >= Number(filters.dimensionMin)) && (!filters.dimensionMax || longest != null && longest <= Number(filters.dimensionMax)) && (!filters.dateAfter || f.modified.slice(0, 10) >= filters.dateAfter) && (!filters.dateBefore || f.modified.slice(0, 10) <= filters.dateBefore);
+    return typeMatches(f.type) && (state.mode !== 'favorites' || f.favorite) && (state.mode !== 'duplicates' || f.duplicateGroup) && (state.mode !== 'missing' || !hasModelDetails(f)) && (state.mode !== 'folder' || f.folder === state.folder || f.folder.startsWith(`${state.folder}/`)) && (state.mode !== 'collection' || f.collection === state.collection) && (state.mode !== 'project' || f.projectId === state.projectId) && matchesModelSearch(f, search) && (!filters.collection || f.collection === filters.collection) && (!filters.designer || String(standard.designer || '').toLowerCase().includes(filters.designer.toLowerCase())) && (!filters.license || String(standard.license || f.projectInfo?.license || '').toLowerCase().includes(filters.license.toLowerCase())) && (!filters.slicer || String(standard.application || '').toLowerCase().includes(filters.slicer.toLowerCase())) && (!filters.sizeMin || f.size >= Number(filters.sizeMin) * megabyte) && (!filters.sizeMax || f.size <= Number(filters.sizeMax) * megabyte) && (!filters.dimensionMin || longest != null && longest >= Number(filters.dimensionMin)) && (!filters.dimensionMax || longest != null && longest <= Number(filters.dimensionMax)) && (!filters.dateAfter || f.modified.slice(0, 10) >= filters.dateAfter) && (!filters.dateBefore || f.modified.slice(0, 10) <= filters.dateBefore);
   });
   const chosenSort = $('sort').value === 'name' ? (a, b) => a.name.localeCompare(b.name) : $('sort').value === 'size' ? (a, b) => b.size - a.size : (a, b) => b.modified.localeCompare(a.modified);
   result.sort(state.mode === 'duplicates' ? (a, b) => a.duplicateGroup.localeCompare(b.duplicateGroup) || chosenSort(a, b) : chosenSort);

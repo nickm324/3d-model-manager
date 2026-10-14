@@ -9,3 +9,12 @@ export function matchesModelSearch(file, query) {
   if (wanted.length > 1 && wanted.startsWith('"') && wanted.endsWith('"')) return text.includes(wanted.slice(1, -1));
   const available = new Set(words(text)); return words(wanted).every(word => available.has(word));
 }
+
+export function hasModelDetails(file) {
+  const standard = file.modelInfo?.standard || {}, project = file.projectInfo || {};
+  return Boolean(
+    file.collection || (file.tags || []).length || file.notes || file.projectId || file.fileRole || file.sourcePath ||
+    standard.title || standard.designer || standard.description || standard.application || standard.license ||
+    project.title || project.description || project.printingNotes || project.attribution || project.license || project.sourceUrl
+  );
+}

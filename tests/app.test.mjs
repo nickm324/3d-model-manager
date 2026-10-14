@@ -101,8 +101,14 @@ test('STEP and Fusion files are indexed, streamed, and replaceable by bridge syn
     assert.deepEqual(library.files.filter(file => ['step', 'stp', 'f3d', 'f3z'].includes(file.type)).map(file => file.name).sort(), ['assembly.stp', 'design.f3d', 'package.f3z', 'part.step']);
     assert.equal((await app.call('/api/upload?replace=1&deferScan=1&path=Parts/part.step', 'POST', 'updated-step')).status, 201);
     assert.equal(await (await app.call('/api/file?path=Parts/part.step')).text(), 'updated-step');
-    assert.equal((await app.call('/api/folders/ensure', 'POST', { paths: ['Workstations', 'Workstations/Desk', 'Workstations/Desk/Models'] })).status, 200);
+    const settings = await (await app.call('/api/settings')).json();
+    assert.equal((await app.call('/api/settings', 'PUT', { ...settings, scanFolders: ['Parts'] })).status, 200);
+    assert.equal((await app.call('/api/folders/ensure', 'POST', { paths: ['Workstations', 'Workstations/Desk', 'Workstations/Desk/Models'], scanRoot: 'Workstations' })).status, 200);
     assert.equal((await fs.stat(path.join(app.library, 'Workstations', 'Desk', 'Models'))).isDirectory(), true);
+    assert.deepEqual((await (await app.call('/api/settings')).json()).scanFolders, ['Parts', 'Workstations']);
+    assert.equal((await app.call('/api/upload?replace=1&deferScan=1&path=Workstations/Desk/Models/local.step', 'POST', 'local-step')).status, 201);
+    assert.equal((await app.call('/api/scan', 'POST')).status, 200);
+    library = await (await app.call('/api/library')).json(); assert.ok(library.folders.includes('Workstations/Desk/Models')); assert.ok(library.files.some(file => file.path === 'Workstations/Desk/Models/local.step'));
   } finally { await app.close(); }
 });
 

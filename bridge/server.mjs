@@ -3,9 +3,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import packageInfo from './package.json' with { type: 'json' };
 import { randomBytes, randomUUID } from 'node:crypto';
 
 const configPath = process.env.MODEL_MANAGER_BRIDGE_CONFIG || path.join(os.homedir(), '.3d-model-manager-bridge.json');
+const bridgeVersion = packageInfo.version;
 const supported = new Set(['.stl', '.3mf', '.scad', '.step', '.stp', '.ste', '.f3d', '.f3z']);
 const candidates = process.platform === 'win32' ? [
   ['Bambu Studio', `${process.env.ProgramFiles}\\Bambu Studio\\bambu-studio.exe`], ['OrcaSlicer', `${process.env.ProgramFiles}\\OrcaSlicer\\orca-slicer.exe`],
@@ -105,13 +107,15 @@ $graphics.DrawLine($dark, 23, 21, 16, 25)
 $graphics.DrawLine($dark, 16, 15, 16, 25)
 $icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
 $tray.Icon = $icon
-$tray.Text = '3D Model Manager Bridge'
+$tray.Text = '3D Model Manager Bridge v${bridgeVersion}'
 $tray.Visible = $true
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 $openItem = $menu.Items.Add('Open status and pairing')
+$aboutItem = $menu.Items.Add('About · Version ${bridgeVersion}')
 $stopItem = $menu.Items.Add('Stop bridge')
 $open = { Start-Process $statusUrl }
 $openItem.add_Click($open)
+$aboutItem.add_Click($open)
 $tray.add_DoubleClick($open)
 $stopItem.add_Click({
   try {
@@ -136,7 +140,7 @@ try { [System.Windows.Forms.Application]::Run($context) } finally { $tray.Visibl
   child.once('error', () => openStatusPage(port));
   return child;
 };
-const page = (port, managementToken) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Model Manager Bridge</title><style>body{margin:0;background:#101923;color:#edf3f9;font:16px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(560px,calc(100% - 40px));background:#1a2735;border:1px solid #3a4a5d;border-radius:14px;padding:30px;box-shadow:0 24px 70px #0007}h1{margin:0 0 8px;font-size:1.5rem}p{color:#aebed0;line-height:1.55}.code{font:700 2.3rem ui-monospace,monospace;letter-spacing:.22em;color:#ffad54;background:#111b26;padding:15px 18px;border-radius:9px;text-align:center}button{background:#273648;color:#eef4fa;border:1px solid #53677e;border-radius:7px;padding:10px 14px;cursor:pointer}.ok{color:#9bd8ad}.row{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:24px}</style><main class="card"><h1>3D Model Manager Bridge</h1><p class="ok">Running on this computer${config.installedPath ? ' · Starts with Windows' : ''}</p><p>Enter this code in <strong>3D Model Manager → Settings → Desktop slicers</strong> the first time you connect:</p><div class="code">${config.code}</div><div class="row"><p>You can close this browser tab. The bridge will keep running quietly in the background.</p><button id="stop">Stop bridge</button></div></main><script>document.querySelector('#stop').onclick=async()=>{await fetch('/quit',{method:'POST',headers:{'Content-Type':'application/json',Connection:'close'},body:JSON.stringify({token:'${managementToken}'})});document.body.innerHTML='<main class="card"><h1>Bridge stopped</h1><p>You can close this tab. It will start again the next time you sign in to Windows.</p></main>'}</script></html>`;
+const page = (port, managementToken) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D Model Manager Bridge</title><style>body{margin:0;background:#101923;color:#edf3f9;font:16px system-ui;display:grid;place-items:center;min-height:100vh}.card{width:min(560px,calc(100% - 40px));background:#1a2735;border:1px solid #3a4a5d;border-radius:14px;padding:30px;box-shadow:0 24px 70px #0007}h1{margin:0 0 8px;font-size:1.5rem}p{color:#aebed0;line-height:1.55}.version{color:#ffad54;font-weight:700}.code{font:700 2.3rem ui-monospace,monospace;letter-spacing:.22em;color:#ffad54;background:#111b26;padding:15px 18px;border-radius:9px;text-align:center}button{background:#273648;color:#eef4fa;border:1px solid #53677e;border-radius:7px;padding:10px 14px;cursor:pointer}.ok{color:#9bd8ad}.row{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-top:24px}</style><main class="card"><h1>3D Model Manager Bridge</h1><p class="version">Version ${bridgeVersion}</p><p class="ok">Running on this computer${config.installedPath ? ' · Starts with Windows' : ''}</p><p>Enter this code in <strong>3D Model Manager → Settings → Desktop slicers</strong> the first time you connect:</p><div class="code">${config.code}</div><div class="row"><p>You can close this browser tab. The bridge will keep running quietly in the background.</p><button id="stop">Stop bridge</button></div></main><script>document.querySelector('#stop').onclick=async()=>{await fetch('/quit',{method:'POST',headers:{'Content-Type':'application/json',Connection:'close'},body:JSON.stringify({token:'${managementToken}'})});document.body.innerHTML='<main class="card"><h1>Bridge stopped</h1><p>You can close this tab. It will start again the next time you sign in to Windows.</p></main>'}</script></html>`;
 
 async function slicers() {
   const result = [];
@@ -186,7 +190,7 @@ export function startBridge(port = 3211, options = {}) {
         config.token = randomBytes(24).toString('base64url'); config.origin = origin; await save(); return reply(res, 200, { token: config.token }, origin);
       }
       if (!config.token || req.headers['x-bridge-token'] !== config.token || origin !== config.origin) return reply(res, 401, { error: 'Bridge is not paired with this site.' }, origin);
-      if (url.pathname === '/status') return reply(res, 200, { slicers: await slicers(), platform: process.platform, hostname: os.hostname(), folders: config.folders.map(publicFolder) }, origin);
+      if (url.pathname === '/status') return reply(res, 200, { version: bridgeVersion, slicers: await slicers(), platform: process.platform, hostname: os.hostname(), folders: config.folders.map(publicFolder) }, origin);
       if (url.pathname === '/settings' && req.method === 'POST') {
         config.defaultPath = String(body.defaultPath || config.defaultPath || '');
         if (body.manualAdd?.name && body.manualAdd?.path) config.manual = [...config.manual.filter(x => x.path !== body.manualAdd.path), { name: String(body.manualAdd.name).slice(0, 80), path: String(body.manualAdd.path) }].slice(-20);
