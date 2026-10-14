@@ -2,6 +2,13 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.6] - 2026-10-14
+
+### Fixed
+
+- Replace the invisible Windows shell folder browser with a foreground native folder dialog that runs without displaying a PowerShell window.
+- Automatically release a stalled folder-selection request instead of leaving the settings button busy indefinitely.
+
 ## [2.3.5] - 2026-10-14
 
 ### Added
