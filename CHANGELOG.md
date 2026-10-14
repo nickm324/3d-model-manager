@@ -2,6 +2,18 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.5] - 2026-10-14
+
+### Added
+
+- A self-installing Windows bridge setup that installs under the current user, creates Desktop and Start Menu shortcuts, and starts automatically at sign-in.
+
+### Fixed
+
+- Use the Windows shell folder browser instead of a PowerShell-hosted picker that could open as a blank terminal.
+- Make **Stop bridge** close both the tray icon and the background bridge process.
+- Show on the bridge status page when it is installed for Windows startup.
+
 ## [2.3.4] - 2026-10-14
 
 ### Fixed
