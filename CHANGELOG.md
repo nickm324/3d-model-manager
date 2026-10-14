@@ -10,6 +10,10 @@ All notable changes are documented here. This project follows semantic versionin
 - Double-click the tray icon to open status and pairing, or use its menu to stop the bridge.
 - A Windows notification when the background bridge starts.
 
+### Fixed
+
+- Allow the bundled STEP loader's generated JavaScript to run so STEP and STP previews render instead of showing a Content Security Policy error.
+
 ## [2.3.2] - 2026-10-14
 
 ### Fixed

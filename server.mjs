@@ -749,10 +749,12 @@ export async function createApp(options = {}) {
         if (method === 'GET') return json(res, { id, status: job.status, log: job.log });
       }
       if (endpoint.startsWith('/api/')) throw fail(404, 'Unknown request.');
-      const staticFiles = { '/': ['index.html', 'text/html'], '/file-open.js': ['file-open.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'], '/occt-import-js.js': ['occt-import-js.js', 'text/javascript'], '/occt-import-js.wasm': ['occt-import-js.wasm', 'application/wasm'] };
+      const staticFiles = { '/': ['index.html', 'text/html'], '/file-open.js': ['file-open.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'], '/step-worker.js': ['step-worker.js', 'text/javascript'], '/occt-import-js.js': ['occt-import-js.js', 'text/javascript'], '/occt-import-js.wasm': ['occt-import-js.wasm', 'application/wasm'] };
       if (!staticFiles[endpoint] || !['GET', 'HEAD'].includes(method)) throw fail(404, 'Page not found.');
       const [name, mime] = staticFiles[endpoint]; const content = await fs.readFile(path.join(here, 'public', name));
-      res.writeHead(200, { 'Content-Type': `${mime}; charset=utf-8`, 'Cache-Control': 'no-cache' }); res.end(method === 'HEAD' ? undefined : content);
+      const headers = { 'Content-Type': `${mime}; charset=utf-8`, 'Cache-Control': 'no-cache' };
+      if (endpoint === '/step-worker.js') headers['Content-Security-Policy'] = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; connect-src 'self'";
+      res.writeHead(200, headers); res.end(method === 'HEAD' ? undefined : content);
     } catch (e) {
       if (res.headersSent || res.destroyed) { res.destroy(); return; }
       const status = e.status || (e.code === 'EEXIST' ? 409 : e.code === 'EACCES' || e.code === 'EROFS' ? 403 : e.code === 'ENOENT' ? 404 : 500);
