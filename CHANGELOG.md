@@ -2,6 +2,15 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.4] - 2026-10-14
+
+### Fixed
+
+- Show a clear connected badge and workstation name after the desktop bridge is paired.
+- Display the native Windows folder picker when choosing a local model folder from the Docker app.
+- Show progress while the app waits for the workstation folder picker.
+- Replace the generic bridge tray symbol with a 3D Model Manager orange cube icon.
+
 ## [2.3.3] - 2026-10-14
 
 ### Added

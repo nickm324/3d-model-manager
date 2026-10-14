@@ -148,8 +148,18 @@ async function bridgeRequest(endpoint, body) {
   const response = await fetch(`http://127.0.0.1:3211${endpoint}`, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', 'X-Bridge-Token': bridgeToken() }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Desktop bridge is unavailable.'); return result;
 }
+function setBridgeConnection(connected, hostname = '') {
+  const badge = $('bridge-connection-state');
+  badge.classList.toggle('connected', connected);
+  badge.textContent = connected ? `Connected${hostname ? ` · ${hostname}` : ''}` : 'Not connected';
+  $('bridge-pair').textContent = connected ? 'Re-pair bridge' : 'Pair bridge';
+}
 async function detectSlicers() {
-  const result = await bridgeRequest('/status'); $('bridge-default').innerHTML = result.slicers.length ? result.slicers.map(s => `<option value="${escape(s.path)}" ${s.default ? 'selected' : ''}>${escape(s.name)}</option>`).join('') : '<option value="">No supported slicers detected</option>';
+  let result;
+  try { result = await bridgeRequest('/status'); }
+  catch (error) { setBridgeConnection(false); throw error; }
+  setBridgeConnection(true, result.hostname);
+  $('bridge-default').innerHTML = result.slicers.length ? result.slicers.map(s => `<option value="${escape(s.path)}" ${s.default ? 'selected' : ''}>${escape(s.name)}</option>`).join('') : '<option value="">No supported slicers detected</option>';
   $('slicer-choice').querySelectorAll('option[data-bridge]').forEach(option => option.remove());
   for (const slicer of result.slicers) { const option = new Option(slicer.name, `bridge:${slicer.path}`); option.dataset.bridge = '1'; $('slicer-choice').add(option); }
   $('bridge-status').textContent = result.slicers.length ? `${result.slicers.length} slicer${result.slicers.length === 1 ? '' : 's'} detected on this computer.` : 'Bridge connected, but no supported slicers were detected.';
@@ -545,7 +555,12 @@ action('admin-new-folder', () => promptPath('Create a library folder', 'Create a
 action('bridge-pair', async () => { const response = await fetch('http://127.0.0.1:3211/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: $('bridge-code').value.trim() }) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Could not pair the bridge.'); localStorage.setItem('model-manager-bridge-token', result.token); await detectSlicers(); toast('Desktop bridge paired.'); });
 action('bridge-refresh', detectSlicers);
 action('bridge-add-manual', async () => { const name = $('bridge-manual-name').value.trim(), path = $('bridge-manual-path').value.trim(); if (!name || !path) throw new Error('Enter both a slicer name and executable path.'); await bridgeRequest('/settings', { manualAdd: { name, path } }); await detectSlicers(); $('bridge-manual-name').value = ''; $('bridge-manual-path').value = ''; });
-action('bridge-add-folder', async () => { const result = await bridgeRequest('/folders/pick', {}); if (result.cancelled) return; await detectSlicers(); toast(`${result.folder.name} approved.`); });
+action('bridge-add-folder', async () => {
+  const button = $('bridge-add-folder'), label = button.textContent;
+  button.disabled = true; button.textContent = 'Choose folder on desktop…'; $('bridge-status').textContent = 'The folder picker is open on this computer.';
+  try { const result = await bridgeRequest('/folders/pick', {}); if (result.cancelled) { $('bridge-status').textContent = 'Folder selection cancelled.'; return; } await detectSlicers(); toast(`${result.folder.name} approved.`); }
+  finally { button.disabled = false; button.textContent = label; }
+});
 action('bridge-sync-all', async () => { const folders = (await detectSlicers()).folders || []; for (const folder of folders) await syncBridgeFolder(folder.id); });
 $('bridge-folders').addEventListener('click', async event => { const sync = event.target.closest('[data-sync-bridge-folder]'), remove = event.target.closest('[data-remove-bridge-folder]'); try { if (sync) await syncBridgeFolder(sync.dataset.syncBridgeFolder); if (remove) { await bridgeRequest('/folders/remove', { id: remove.dataset.removeBridgeFolder }); await detectSlicers(); } } catch (error) { toast(error.message); } });
 $('bridge-default').addEventListener('change', async () => { await bridgeRequest('/settings', { defaultPath: $('bridge-default').value }); $('bridge-status').textContent = 'Default slicer saved on this computer.'; });

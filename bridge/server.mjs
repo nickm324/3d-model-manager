@@ -20,8 +20,8 @@ config = { code: String(config.code || Math.floor(100000 + Math.random() * 90000
 const save = () => fs.writeFile(configPath, JSON.stringify(config, null, 2));
 await save();
 
-const runCapture = (command, args) => new Promise((resolve, reject) => {
-  const child = spawn(command, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+const runCapture = (command, args, options = {}) => new Promise((resolve, reject) => {
+  const child = spawn(command, args, { windowsHide: options.windowsHide ?? true, stdio: ['ignore', 'pipe', 'pipe'] });
   const output = [], errors = [];
   child.stdout.on('data', chunk => output.push(chunk)); child.stderr.on('data', chunk => errors.push(chunk));
   child.once('error', reject);
@@ -30,7 +30,7 @@ const runCapture = (command, args) => new Promise((resolve, reject) => {
 async function pickFolder() {
   if (process.platform === 'win32') {
     const script = "Add-Type -AssemblyName System.Windows.Forms; $picker = New-Object System.Windows.Forms.FolderBrowserDialog; $picker.Description = 'Choose a model folder'; $picker.ShowNewFolderButton = $true; if ($picker.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $picker.SelectedPath } else { exit 2 }";
-    return runCapture('powershell.exe', ['-NoProfile', '-STA', '-Command', script]);
+    return runCapture('powershell.exe', ['-NoProfile', '-STA', '-WindowStyle', 'Hidden', '-Command', script], { windowsHide: false });
   }
   if (process.platform === 'darwin') return (await runCapture('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choose a model folder")'])).replace(/\/$/, '');
   const choices = [['zenity', ['--file-selection', '--directory', '--title=Choose a model folder']], ['kdialog', ['--getexistingdirectory', os.homedir(), '--title', 'Choose a model folder']], ['yad', ['--file-selection', '--directory', '--title=Choose a model folder']]];
@@ -48,7 +48,23 @@ $statusUrl = $env:MODEL_MANAGER_BRIDGE_STATUS_URL
 $quitToken = $env:MODEL_MANAGER_BRIDGE_MANAGEMENT_TOKEN
 $context = New-Object System.Windows.Forms.ApplicationContext
 $tray = New-Object System.Windows.Forms.NotifyIcon
-$tray.Icon = [System.Drawing.SystemIcons]::Application
+$bitmap = New-Object System.Drawing.Bitmap 32, 32
+$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+$graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$orange = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 239, 158, 73))
+$dark = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 22, 31, 42)), 2.2
+$graphics.FillEllipse($orange, 1, 1, 30, 30)
+$graphics.DrawLine($dark, 16, 7, 9, 11)
+$graphics.DrawLine($dark, 16, 7, 23, 11)
+$graphics.DrawLine($dark, 9, 11, 16, 15)
+$graphics.DrawLine($dark, 23, 11, 16, 15)
+$graphics.DrawLine($dark, 9, 11, 9, 21)
+$graphics.DrawLine($dark, 23, 11, 23, 21)
+$graphics.DrawLine($dark, 9, 21, 16, 25)
+$graphics.DrawLine($dark, 23, 21, 16, 25)
+$graphics.DrawLine($dark, 16, 15, 16, 25)
+$icon = [System.Drawing.Icon]::FromHandle($bitmap.GetHicon())
+$tray.Icon = $icon
 $tray.Text = '3D Model Manager Bridge'
 $tray.Visible = $true
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
@@ -69,7 +85,7 @@ $tray.ContextMenuStrip = $menu
 $tray.BalloonTipTitle = '3D Model Manager Bridge'
 $tray.BalloonTipText = 'The bridge is running. Double-click this icon to pair or manage it.'
 $tray.ShowBalloonTip(5000)
-try { [System.Windows.Forms.Application]::Run($context) } finally { $tray.Visible = $false; $tray.Dispose(); $menu.Dispose() }
+try { [System.Windows.Forms.Application]::Run($context) } finally { $tray.Visible = $false; $tray.Dispose(); $menu.Dispose(); $icon.Dispose(); $graphics.Dispose(); $orange.Dispose(); $dark.Dispose(); $bitmap.Dispose() }
 `;
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   const child = spawn('powershell.exe', ['-NoProfile', '-STA', '-EncodedCommand', encoded], {
