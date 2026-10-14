@@ -2,6 +2,14 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.3] - 2026-10-14
+
+### Added
+
+- Windows system-tray controls for the desktop bridge.
+- Double-click the tray icon to open status and pairing, or use its menu to stop the bridge.
+- A Windows notification when the background bridge starts.
+
 ## [2.3.2] - 2026-10-14
 
 ### Fixed
