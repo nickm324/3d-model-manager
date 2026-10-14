@@ -60,7 +60,19 @@ Local development uses `LIBRARY_PATH` as a fallback filesystem library. Use disp
 
 ## Local computer folders
 
-The cross-platform Workstation Bridge can detect slicers and synchronize explicitly approved local folders from Windows, macOS, or Linux. Choose folders with the operating system's folder picker; no path typing is required. Local models are copied into `Workstations/<computer>/<folder>` in the configured Docker library, while the browser and container remain unable to access other workstation files. The Windows release runs quietly in the background and uses a local browser page for status, pairing, and shutdown. See [bridge/README.md](bridge/README.md) for running and building the bridge.
+The optional Workstation Bridge connects the web app to the computer at which you are sitting. It can detect installed slicers, open a model in a desktop slicer, and copy models from folders you explicitly approve into the Docker-managed library.
+
+### Windows quick start
+
+1. Open the [latest release](https://github.com/nickm324/3d-model-manager/releases/latest) and download `3d-model-manager-bridge-setup-*-windows-x64.exe` from **Assets**.
+2. Run the installer. Windows may show an unknown-publisher warning because the installer is not code-signed; choose **More info → Run anyway** if you trust this project and downloaded it from this repository.
+3. The bridge opens its local status page and displays a six-digit pairing code. It also adds a 3D Model Manager icon to the system tray and starts automatically when you sign in to Windows.
+4. In 3D Model Manager, open **Settings → Desktop slicers**, enter the code, and select **Pair bridge**. A green connected badge shows the computer name and running bridge version.
+5. Select **Choose local folder**, approve a folder in the Windows folder picker, and choose **Sync**. Supported files are copied to `Workstations/<computer>/<folder>` and appear under **Folders** after indexing.
+
+The bridge supports STL, 3MF, OpenSCAD (`.scad`), STEP (`.step`, `.stp`, `.ste`), and Autodesk Fusion (`.f3d`, `.f3z`) files. It listens only on the local computer and cannot browse folders you have not approved. Right-click its tray icon to open status, view the installed version, or stop it. Install a newer bridge release over the existing version to upgrade it.
+
+macOS and Linux builds are available from source. See the [complete Workstation Bridge guide](bridge/README.md) for platform requirements, building, troubleshooting, and security details.
 
 ## Project
 
