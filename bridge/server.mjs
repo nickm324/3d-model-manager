@@ -22,10 +22,11 @@ await save();
 
 const runCapture = (command, args, options = {}) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { windowsHide: options.windowsHide ?? true, stdio: ['ignore', 'pipe', 'pipe'] });
-  const output = [], errors = [];
+  const output = [], errors = []; let timedOut = false;
+  const timer = options.timeoutMs ? setTimeout(() => { timedOut = true; child.kill(); }, options.timeoutMs) : null;
   child.stdout.on('data', chunk => output.push(chunk)); child.stderr.on('data', chunk => errors.push(chunk));
-  child.once('error', reject);
-  child.once('close', code => code === 0 ? resolve(Buffer.concat(output).toString('utf8').trim()) : reject(Object.assign(new Error(Buffer.concat(errors).toString('utf8').trim() || 'Folder selection was cancelled.'), { cancelled: true })));
+  child.once('error', error => { if (timer) clearTimeout(timer); reject(error); });
+  child.once('close', code => { if (timer) clearTimeout(timer); if (timedOut) return reject(Object.assign(new Error('The folder picker timed out.'), { cancelled: true })); return code === 0 ? resolve(Buffer.concat(output).toString('utf8').trim()) : reject(Object.assign(new Error(Buffer.concat(errors).toString('utf8').trim() || 'Folder selection was cancelled.'), { cancelled: true })); });
 });
 async function runVbs(script) {
   const file = path.join(os.tmpdir(), `3d-model-manager-${randomUUID()}.vbs`);
@@ -35,7 +36,23 @@ async function runVbs(script) {
 }
 async function pickFolder() {
   if (process.platform === 'win32') {
-    return runVbs(`Set shell = CreateObject("Shell.Application")\nSet folder = shell.BrowseForFolder(0, "Choose a model folder", 65, 0)\nIf folder Is Nothing Then WScript.Quit 2\nWScript.StdOut.Write folder.Self.Path`);
+    const script = `Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = 'Choose a model folder'
+$dialog.ShowNewFolderButton = $true
+$owner = New-Object System.Windows.Forms.Form
+$owner.ShowInTaskbar = $false
+$owner.TopMost = $true
+$owner.FormBorderStyle = 'None'
+$owner.StartPosition = 'CenterScreen'
+$owner.Size = New-Object System.Drawing.Size(1, 1)
+$owner.Opacity = 0
+$owner.Show()
+$owner.Activate()
+try { $result = $dialog.ShowDialog($owner) } finally { $owner.Close(); $owner.Dispose() }
+if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::Write($dialog.SelectedPath) } else { exit 2 }`;
+    return runCapture('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-Command', script], { timeoutMs: 300000 });
   }
   if (process.platform === 'darwin') return (await runCapture('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choose a model folder")'])).replace(/\/$/, '');
   const choices = [['zenity', ['--file-selection', '--directory', '--title=Choose a model folder']], ['kdialog', ['--getexistingdirectory', os.homedir(), '--title', 'Choose a model folder']], ['yad', ['--file-selection', '--directory', '--title=Choose a model folder']]];
