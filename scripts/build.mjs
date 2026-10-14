@@ -3,4 +3,8 @@ import { mkdir, copyFile } from 'node:fs/promises';
 await mkdir('public', { recursive: true });
 await build({ entryPoints: ['./src/app.js'], outfile: 'public/app.js', tsconfigRaw: {}, bundle: true, minify: true, sourcemap: false, format: 'esm', target: 'es2022' });
 for (const name of ['index.html', 'style.css', 'favicon.svg', 'file-open.js']) await copyFile(`src/${name}`, `public/${name}`);
+await copyFile('node_modules/occt-import-js/dist/occt-import-js.wasm', 'public/occt-import-js.wasm');
+await copyFile('node_modules/occt-import-js/dist/occt-import-js.js', 'public/occt-import-js.js');
+await copyFile('node_modules/occt-import-js/dist/license.occt-import-js.txt', 'public/license.occt-import-js.txt');
+await copyFile('node_modules/occt-import-js/dist/license.occt.txt', 'public/license.occt.txt');
 console.log('3D Model Manager browser assets built.');

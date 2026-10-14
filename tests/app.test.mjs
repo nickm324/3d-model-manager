@@ -79,6 +79,19 @@ test('Thingiverse README applies to models in its project subfolders only', asyn
   } finally { await app.close(); }
 });
 
+test('STEP and Fusion files are indexed, streamed, and replaceable by bridge sync', async () => {
+  const app = await fixture();
+  try {
+    for (const name of ['part.step', 'assembly.stp', 'design.f3d', 'package.f3z']) assert.equal((await app.call(`/api/upload?path=Parts/${name}`, 'POST', `first-${name}`)).status, 201);
+    let library = await (await app.call('/api/library')).json();
+    assert.deepEqual(library.files.filter(file => ['step', 'stp', 'f3d', 'f3z'].includes(file.type)).map(file => file.name).sort(), ['assembly.stp', 'design.f3d', 'package.f3z', 'part.step']);
+    assert.equal((await app.call('/api/upload?replace=1&deferScan=1&path=Parts/part.step', 'POST', 'updated-step')).status, 201);
+    assert.equal(await (await app.call('/api/file?path=Parts/part.step')).text(), 'updated-step');
+    assert.equal((await app.call('/api/folders/ensure', 'POST', { paths: ['Workstations', 'Workstations/Desk', 'Workstations/Desk/Models'] })).status, 200);
+    assert.equal((await fs.stat(path.join(app.library, 'Workstations', 'Desk', 'Models'))).isDirectory(), true);
+  } finally { await app.close(); }
+});
+
 test('duplicate detection and bulk metadata/delete operations', async () => {
   const app = await fixture();
   try {

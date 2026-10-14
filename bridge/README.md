@@ -1,5 +1,20 @@
-# 3D Model Manager Bridge
+# 3D Model Manager Workstation Bridge
 
-Run `npm start` on the computer where your slicers are installed. The bridge listens only on `127.0.0.1:3211`. Copy the six-digit pairing code shown in its terminal into 3D Model Manager Settings. It detects common Bambu Studio, OrcaSlicer, PrusaSlicer, and Cura installations and can also store manually configured executable paths.
+The bridge runs only on `127.0.0.1:3211`. It lets the browser application detect desktop slicers and explicitly approve local model folders. It never exposes the rest of the workstation.
 
-Packaging and code-signing workflows for Windows, macOS, and Linux are planned for the public GitHub release. Signing requires platform certificates and publisher accounts.
+Supported local files are STL, 3MF, OpenSCAD (`.scad`), STEP (`.step`, `.stp`, `.ste`), and Autodesk Fusion archives (`.f3d`, `.f3z`). When the user chooses **Sync**, the browser copies those files into `Workstations/<computer>/<folder>` in the Docker application's configured library. Existing synchronized files are updated; files are not deleted from the workstation.
+
+## Run from source
+
+1. Install Node.js 22 or newer.
+2. Run `npm install` in this folder.
+3. Run `npm start`.
+4. Copy the six-digit code shown in the terminal into **Settings → Desktop slicers** in 3D Model Manager.
+
+## Build a standalone application
+
+Run `npm run build` to create an executable for the current computer. Run `npm run build:all` to create unsigned Windows x64, Linux x64/ARM64, and macOS x64/ARM64 executables. The first build downloads the matching Node runtimes.
+
+Windows and macOS may show an unknown-publisher warning until release binaries are code signed. macOS builds may need an ad-hoc signature (`codesign --sign - <file>`) when built on another platform.
+
+The bridge stores approved folders, its pairing token, and slicer settings in `.3d-model-manager-bridge.json` in the current user's home folder.

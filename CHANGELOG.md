@@ -2,6 +2,15 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [2.3.0] - 2026-10-14
+
+### Added
+
+- Interactive STEP previews for `.step`, `.stp`, and `.ste` files using OpenCascade in the browser.
+- Autodesk Fusion `.f3d` and `.f3z` indexing with embedded project-preview extraction.
+- Workstation Bridge folder approval, recursive model discovery, and synchronization into the Docker library.
+- Standalone bridge build targets for Windows, Linux, and macOS.
+
 ## [2.2.1] - 2026-09-29
 
 ### Fixed

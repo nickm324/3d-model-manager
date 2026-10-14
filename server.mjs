@@ -13,7 +13,7 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from 'three/examples/jsm/libs/
 import { normalizeAuth, makePassword, verifyPassword, issueSession, readSession } from './auth.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const types = new Set(['.stl', '.3mf', '.scad']);
+const types = new Set(['.stl', '.3mf', '.scad', '.step', '.stp', '.ste', '.f3d', '.f3z']);
 const openScadLibraryFolders = new Set(['bosl2', 'bosl2-master', 'mcad']);
 const isOpenScadLibraryPath = value => String(value).split('/').some(part => openScadLibraryFolders.has(part.toLowerCase()));
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -691,6 +691,11 @@ export async function createApp(options = {}) {
         });
         await scan(); return json(res, { revision: hash(body.source) });
       }
+      if (endpoint === '/api/folders/ensure' && method === 'POST') {
+        requireWrite(); const body = await jsonBody(req), requested = Array.isArray(body.paths) ? body.paths.map(value => relative(String(value), true)).filter(Boolean).slice(0, 5000) : [];
+        for (const rel of requested.sort((a, b) => a.split('/').length - b.split('/').length)) if (!await storage.exists(metadata.config.smb ? rel : storagePath(path.join(root, rel)))) await storage.mkdir(metadata.config.smb ? rel : storagePath(path.join(root, rel)));
+        return json(res, { ensured: requested.length });
+      }
       if (endpoint === '/api/folder' && method === 'POST') {
         requireWrite(); const body = await jsonBody(req); const dir = await resolveFile(body.path, { parent: true });
         await storage.mkdir(metadata.config.smb ? body.path : storagePath(dir)); await scan(); return json(res, { path: body.path }, 201);
@@ -713,20 +718,20 @@ export async function createApp(options = {}) {
         await scan(); return json(res, { path: body.target });
       }
       if (endpoint === '/api/upload' && method === 'POST') {
-        requireWrite(); const rel = url.searchParams.get('path'); const target = await resolveFile(rel, { parent: true });
-        if (!types.has(path.extname(target).toLowerCase())) throw fail(415, 'Import STL, 3MF, or SCAD files.');
-        if (await storage.exists(metadata.config.smb ? rel : storagePath(target))) throw fail(409, 'That name already exists. Choose another name.');
+        requireWrite(); const rel = url.searchParams.get('path'); const target = await resolveFile(rel, { parent: true }), replace = url.searchParams.get('replace') === '1', deferScan = url.searchParams.get('deferScan') === '1';
+        if (!types.has(path.extname(target).toLowerCase())) throw fail(415, 'Import STL, 3MF, OpenSCAD, STEP, or Fusion files.');
+        if (!replace && await storage.exists(metadata.config.smb ? rel : storagePath(target))) throw fail(409, 'That name already exists. Choose another name.');
         if (metadata.config.smb) {
           const chunks = []; let size = 0;
           for await (const chunk of req) { size += chunk.length; if (size > maxBytes) throw fail(413, 'File is too large.'); chunks.push(chunk); }
-          await storage.writeFile(rel, Buffer.concat(chunks)); await scan(); return json(res, { path: rel }, 201);
+          await storage.writeFile(rel, Buffer.concat(chunks)); if (!deferScan) await scan(); return json(res, { path: rel }, 201);
         }
         const temp = path.join(path.dirname(target), `.3d-model-manager-${randomUUID()}.tmp`);
         let size = 0;
         const limit = new Transform({ transform(chunk, enc, cb) { size += chunk.length; cb(size > maxBytes ? fail(413, 'File is too large.') : null, chunk); } });
-        try { await pipeline(req, limit, createWriteStream(temp, { flags: 'wx' })); await fs.copyFile(temp, target, 1); }
+        try { await pipeline(req, limit, createWriteStream(temp, { flags: 'wx' })); await fs.copyFile(temp, target, replace ? 0 : 1); }
         finally { await fs.rm(temp, { force: true }).catch(() => {}); }
-        await scan(); return json(res, { path: rel }, 201);
+        if (!deferScan) await scan(); return json(res, { path: rel }, 201);
       }
       if (endpoint === '/api/render' && method === 'POST') return json(res, await exclusive(() => jsonBody(req).then(startRender)), 202);
       if (endpoint.startsWith('/api/render/')) {
@@ -744,7 +749,7 @@ export async function createApp(options = {}) {
         if (method === 'GET') return json(res, { id, status: job.status, log: job.log });
       }
       if (endpoint.startsWith('/api/')) throw fail(404, 'Unknown request.');
-      const staticFiles = { '/': ['index.html', 'text/html'], '/file-open.js': ['file-open.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+      const staticFiles = { '/': ['index.html', 'text/html'], '/file-open.js': ['file-open.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'], '/occt-import-js.js': ['occt-import-js.js', 'text/javascript'], '/occt-import-js.wasm': ['occt-import-js.wasm', 'application/wasm'] };
       if (!staticFiles[endpoint] || !['GET', 'HEAD'].includes(method)) throw fail(404, 'Page not found.');
       const [name, mime] = staticFiles[endpoint]; const content = await fs.readFile(path.join(here, 'public', name));
       res.writeHead(200, { 'Content-Type': `${mime}; charset=utf-8`, 'Cache-Control': 'no-cache' }); res.end(method === 'HEAD' ? undefined : content);

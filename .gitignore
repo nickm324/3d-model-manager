@@ -1,6 +1,7 @@
 node_modules/
 .npm-cache/
 public/
+bridge/dist/
 .env
 data/
 demo-library/
